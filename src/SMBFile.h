@@ -47,6 +47,8 @@ public:
   virtual int Stat(const VFSURL& url, struct __stat64* buffer) override;
   virtual bool Close(void* context) override;
   virtual bool Exists(const VFSURL& url) override;
+  virtual void ClearOutIdle();
+  virtual void DisconnectAll();
   virtual bool GetDirectory(const VFSURL& url, std::vector<kodi::vfs::CDirEntry>& items, CVFSCallbacks callbacks) override;
 };
 

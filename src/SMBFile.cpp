@@ -34,6 +34,7 @@ extern "C"
 
 void* CSMBFile::Open(const VFSURL& url)
 {
+  CSMBConnection::Get().AddActiveConnection();
   int ret = 0;
 
   smb2_url *smburl = nullptr;
@@ -55,6 +56,7 @@ void* CSMBFile::Open(const VFSURL& url)
   SMBContext* result = new SMBContext;
 
   result->pSmbContext = CSMBConnection::Get().GetSmbContext();
+  result->sharename = CSMBConnection::Get().GetContextMapId();
 
   result->pFileHandle = smb2_open(result->pSmbContext, smburl->path, O_RDONLY);
 
@@ -90,6 +92,8 @@ ssize_t CSMBFile::Read(void* context, void* lpBuf, size_t uiBufSize)
   P8PLATFORM::CLockObject lock(CSMBConnection::Get());
   ssize_t numberOfBytesRead = smb2_read(ctx->pSmbContext, ctx->pFileHandle, (uint8_t *)lpBuf, uiBufSize);
 
+  CSMBConnection::Get().resetKeepAlive(ctx->sharename, ctx->pFileHandle);
+
   //something went wrong ...
   if (numberOfBytesRead < 0)
     kodi::Log(ADDON_LOG_ERROR, "%s - Error( %" PRId64", %s )", __FUNCTION__, (int64_t)numberOfBytesRead, smb2_get_error(ctx->pSmbContext));
@@ -104,10 +108,11 @@ int64_t CSMBFile::Seek(void* context, int64_t iFilePosition, int iWhence)
     return 0;
 
   int ret = 0;
+  uint64_t offset = 0;
 
   P8PLATFORM::CLockObject lock(CSMBConnection::Get());
 
-  ret = (int)smb2_lseek(ctx->pSmbContext, ctx->pFileHandle, iFilePosition, iWhence);
+  ret = (int)smb2_lseek(ctx->pSmbContext, ctx->pFileHandle, iFilePosition, iWhence, &offset);
   if (ret < 0)
   {
     kodi::Log(ADDON_LOG_ERROR, "%s - Error( seekpos: %" PRId64 ", whence: %i, fsize: %" PRId64 ", %s)",
@@ -115,8 +120,7 @@ int64_t CSMBFile::Seek(void* context, int64_t iFilePosition, int iWhence)
     return -1;
   }
 
-  // not sure about this, might have to find a way to get current offset
-  return (int64_t)ret;
+  return (int64_t)offset;
 }
 
 int64_t CSMBFile::GetLength(void* context)
@@ -142,15 +146,14 @@ int64_t CSMBFile::GetPosition(void* context)
 
   P8PLATFORM::CLockObject lock(CSMBConnection::Get());
 
-  ret = (int)smb2_lseek(CSMBConnection::Get().GetSmbContext(), ctx->pFileHandle, 0, SEEK_CUR);
+  ret = (int)smb2_lseek(CSMBConnection::Get().GetSmbContext(), ctx->pFileHandle, 0, SEEK_CUR, &offset);
 
   if (ret < 0)
   {
     kodi::Log(ADDON_LOG_ERROR, "SMB: Failed to lseek(%s)", smb2_get_error(CSMBConnection::Get().GetSmbContext()));
   }
 
-  // todo, smb2_lseek doesn't provide current position information
-  return ret;
+  return offset;
 }
 
 int CSMBFile::IoControl(void* context, XFILE::EIoControl request, void* param)
@@ -214,12 +217,14 @@ bool CSMBFile::Close(void* context)
     return false;
 
   P8PLATFORM::CLockObject lock(CSMBConnection::Get());
+  CSMBConnection::Get().AddIdleConnection();
 
   if (ctx->pFileHandle != nullptr && ctx->pSmbContext != nullptr)
   {
     int ret = 0;
     kodi::Log(ADDON_LOG_DEBUG,"CSMBFile::Close closing file %s", ctx->filename.c_str());
 
+    CSMBConnection::Get().removeFromKeepAliveList(ctx->pFileHandle);
     ret = smb2_close(ctx->pSmbContext, ctx->pFileHandle);
 
     if (ret < 0)
@@ -238,9 +243,20 @@ bool CSMBFile::Exists(const VFSURL& url)
   return Stat(url, nullptr) == 0;
 }
 
+void CSMBFile::ClearOutIdle()
+{
+  CSMBConnection::Get().CheckIfIdle();
+}
+
+void CSMBFile::DisconnectAll()
+{
+  CSMBConnection::Get().Deinit();
+}
+
 bool CSMBFile::GetDirectory(const VFSURL& url, std::vector<kodi::vfs::CDirEntry>& items, CVFSCallbacks callbacks)
 {
   P8PLATFORM::CLockObject lock(CSMBConnection::Get());
+  CSMBConnection::Get().AddActiveConnection();
 
   smb2_url *smburl = nullptr;
   smb2dir *smbdir = nullptr;
