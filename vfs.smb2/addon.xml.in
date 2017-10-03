@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<addon
+  id="vfs.smb2"
+  version="1.0.0"
+  name="SMB support (libsmb2)"
+  provider-name="lrusak">
+  <requires>@ADDON_DEPENDS@</requires>
+  <extension
+    point="kodi.vfs"
+    protocols="smb"
+    files="true"
+    directories="true"
+    library_@PLATFORM@="@LIBRARY_FILENAME@" />
+  <extension point="xbmc.addon.metadata">
+    <summary lang="en">SMB support</summary>
+    <description lang="en">SMB support</description>
+    <platform>@PLATFORM@</platform>
+  </extension>
+</addon>
