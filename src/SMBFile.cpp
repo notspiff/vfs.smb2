@@ -58,7 +58,8 @@ void* CSMBFile::Open(const VFSURL& url)
     return nullptr;
   }
 
-  result->pFileHandle = smb2_open(result->pSmbContext, smburl->path, O_RDONLY);
+  if(!result->pFileHandle)
+    result->pFileHandle = smb2_open(result->pSmbContext, smburl->path, O_RDONLY);
 
   if (!result->pFileHandle)
   {
