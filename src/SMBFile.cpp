@@ -46,21 +46,23 @@ void* CSMBFile::Open(const VFSURL& url)
     return nullptr;
   }
 
-  smburl = smb2_parse_url(CSMBConnection::Get().GetSmbContext(), url.url);
+  SMBContext* result = new SMBContext;
+
+  result->pSmbContext = CSMBConnection::Get().GetSmbContext();
+  result->sharename = CSMBConnection::Get().GetContextMapId();
+
+  smburl = smb2_parse_url(result->pSmbContext, url.url);
   if (!smburl)
   {
-    kodi::Log(ADDON_LOG_ERROR, "Failed to parse url: %s", smb2_get_error(CSMBConnection::Get().GetSmbContext()));
+    kodi::Log(ADDON_LOG_ERROR, "Failed to parse url: %s", smb2_get_error(result->pSmbContext));
     return nullptr;
   }
 
-  SMBContext* result = new SMBContext;
-
-  result->sharename = CSMBConnection::Get().GetContextMapId();
-  result->pFileHandle = smb2_open(CSMBConnection::Get().GetSmbContext(), smburl->path, O_RDONLY);
+  result->pFileHandle = smb2_open(result->pSmbContext, smburl->path, O_RDONLY);
 
   if (!result->pFileHandle)
   {
-    kodi::Log(ADDON_LOG_INFO, "CSMBFile::Open: Unable to open file : '%s'  error : '%s'", smburl->path, smb2_get_error(CSMBConnection::Get().GetSmbContext()));
+    kodi::Log(ADDON_LOG_INFO, "CSMBFile::Open: Unable to open file : '%s'  error : '%s'", smburl->path, smb2_get_error(result->pSmbContext));
     delete result;
     return nullptr;
   }
@@ -84,17 +86,17 @@ void* CSMBFile::Open(const VFSURL& url)
 ssize_t CSMBFile::Read(void* context, void* lpBuf, size_t uiBufSize)
 {
   SMBContext* ctx = (SMBContext*)context;
-  if (!ctx || !ctx->pFileHandle)
+  if (!ctx || !ctx->pFileHandle || !ctx->pSmbContext)
     return -1;
 
   P8PLATFORM::CLockObject lock(CSMBConnection::Get());
-  ssize_t numberOfBytesRead = smb2_read(CSMBConnection::Get().GetSmbContext(), ctx->pFileHandle, (uint8_t *)lpBuf, uiBufSize);
+  ssize_t numberOfBytesRead = smb2_read(ctx->pSmbContext, ctx->pFileHandle, (uint8_t *)lpBuf, uiBufSize);
 
   CSMBConnection::Get().resetKeepAlive(ctx->sharename, ctx->pFileHandle);
 
   //something went wrong ...
   if (numberOfBytesRead < 0)
-    kodi::Log(ADDON_LOG_ERROR, "%s - Error( %" PRId64", %s )", __FUNCTION__, (int64_t)numberOfBytesRead, smb2_get_error(CSMBConnection::Get().GetSmbContext()));
+    kodi::Log(ADDON_LOG_ERROR, "%s - Error( %" PRId64", %s )", __FUNCTION__, (int64_t)numberOfBytesRead, smb2_get_error(ctx->pSmbContext));
 
   return numberOfBytesRead;
 }
@@ -102,7 +104,7 @@ ssize_t CSMBFile::Read(void* context, void* lpBuf, size_t uiBufSize)
 int64_t CSMBFile::Seek(void* context, int64_t iFilePosition, int iWhence)
 {
   SMBContext* ctx = (SMBContext*)context;
-  if (!ctx || !ctx->pFileHandle)
+  if (!ctx || !ctx->pFileHandle || !ctx->pSmbContext)
     return 0;
 
   int ret = 0;
@@ -110,11 +112,11 @@ int64_t CSMBFile::Seek(void* context, int64_t iFilePosition, int iWhence)
 
   P8PLATFORM::CLockObject lock(CSMBConnection::Get());
 
-  ret = (int)smb2_lseek(CSMBConnection::Get().GetSmbContext(), ctx->pFileHandle, iFilePosition, iWhence, &offset);
+  ret = (int)smb2_lseek(ctx->pSmbContext, ctx->pFileHandle, iFilePosition, iWhence, &offset);
   if (ret < 0)
   {
     kodi::Log(ADDON_LOG_ERROR, "%s - Error( seekpos: %" PRId64 ", whence: %i, fsize: %" PRId64 ", %s)",
-              __FUNCTION__, iFilePosition, iWhence, ctx->size, smb2_get_error(CSMBConnection::Get().GetSmbContext()));
+              __FUNCTION__, iFilePosition, iWhence, ctx->size, smb2_get_error(ctx->pSmbContext));
     return -1;
   }
 
@@ -160,16 +162,16 @@ int64_t CSMBFile::GetPosition(void* context)
   int ret = 0;
   uint64_t offset = 0;
 
-  if (CSMBConnection::Get().GetSmbContext() == nullptr || ctx->pFileHandle == nullptr)
+  if (!ctx || !ctx->pFileHandle || !ctx->pSmbContext)
     return 0;
 
   P8PLATFORM::CLockObject lock(CSMBConnection::Get());
 
-  ret = (int)smb2_lseek(CSMBConnection::Get().GetSmbContext(), ctx->pFileHandle, 0, SEEK_CUR, &offset);
+  ret = (int)smb2_lseek(ctx->pSmbContext, ctx->pFileHandle, 0, SEEK_CUR, &offset);
 
   if (ret < 0)
   {
-    kodi::Log(ADDON_LOG_ERROR, "SMB: Failed to lseek(%s)", smb2_get_error(CSMBConnection::Get().GetSmbContext()));
+    kodi::Log(ADDON_LOG_ERROR, "SMB: Failed to lseek(%s)", smb2_get_error(ctx->pSmbContext));
   }
 
   return offset;
@@ -237,17 +239,17 @@ bool CSMBFile::Close(void* context)
   P8PLATFORM::CLockObject lock(CSMBConnection::Get());
   CSMBConnection::Get().AddIdleConnection();
 
-  if (ctx->pFileHandle != nullptr && CSMBConnection::Get().GetSmbContext() != nullptr)
+  if (!ctx || !ctx->pFileHandle || !ctx->pSmbContext)
   {
     int ret = 0;
     kodi::Log(ADDON_LOG_DEBUG,"CSMBFile::Close closing file %s", ctx->filename.c_str());
 
     CSMBConnection::Get().removeFromKeepAliveList(ctx->pFileHandle);
-    ret = smb2_close(CSMBConnection::Get().GetSmbContext(), ctx->pFileHandle);
+    ret = smb2_close(ctx->pSmbContext, ctx->pFileHandle);
 
     if (ret < 0)
     {
-      kodi::Log(ADDON_LOG_ERROR, "Failed to close(%s) - %s", ctx->filename.c_str(), smb2_get_error(CSMBConnection::Get().GetSmbContext()));
+      kodi::Log(ADDON_LOG_ERROR, "Failed to close(%s) - %s", ctx->filename.c_str(), smb2_get_error(ctx->pSmbContext));
     }
   }
 
