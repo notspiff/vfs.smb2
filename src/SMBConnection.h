@@ -67,6 +67,7 @@ public:
   void resetKeepAlive(std::string _sharename, struct smb2fh  *_pFileHandle);
   //removes file handle from keep alive list
   void removeFromKeepAliveList(struct smb2fh  *_pFileHandle);
+  const std::string  GetContextMapId() const {return m_shareName;}
 
 private:
   CSMBConnection();

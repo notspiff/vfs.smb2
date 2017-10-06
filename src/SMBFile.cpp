@@ -55,6 +55,7 @@ void* CSMBFile::Open(const VFSURL& url)
 
   SMBContext* result = new SMBContext;
 
+  result->sharename = CSMBConnection::Get().GetContextMapId();
   result->pFileHandle = smb2_open(CSMBConnection::Get().GetSmbContext(), smburl->path, O_RDONLY);
 
   if (!result->pFileHandle)
@@ -120,6 +121,7 @@ int64_t CSMBFile::Seek(void* context, int64_t iFilePosition, int iWhence)
   return (int64_t)offset;
 }
 
+/*
 int CSMBFile::Truncate(void* context, int64_t size)
 {
   SMBContext* ctx = (SMBContext*)context;
@@ -128,7 +130,7 @@ int CSMBFile::Truncate(void* context, int64_t size)
 
   int ret = 0;
   P8PLATFORM::CLockObject lock(CSMBConnection::Get());
-  ret = (int)smb2_truncate(CSMBConnection::Get().GetSmbContext(), ctx->pFileHandle, size);
+  ret = (int)smb2_ftruncate(CSMBConnection::Get().GetSmbContext(), ctx->pFileHandle, size);
   if (ret < 0)
   {
     kodi::Log(ADDON_LOG_ERROR, "%s - Error( ftruncate: %" PRId64 ", fsize: %" PRId64 ", %s)",
@@ -138,6 +140,7 @@ int CSMBFile::Truncate(void* context, int64_t size)
 
   return ret;
 }
+*/
 
 int64_t CSMBFile::GetLength(void* context)
 {
