@@ -55,9 +55,6 @@ void* CSMBFile::Open(const VFSURL& url)
 
   SMBContext* result = new SMBContext;
 
-  result->pSmbContext = CSMBConnection::Get().GetSmbContext();
-  result->sharename = CSMBConnection::Get().GetContextMapId();
-
   result->pFileHandle = smb2_open(result->pSmbContext, smburl->path, O_RDONLY);
 
   if (!result->pFileHandle)
@@ -86,17 +83,21 @@ void* CSMBFile::Open(const VFSURL& url)
 ssize_t CSMBFile::Read(void* context, void* lpBuf, size_t uiBufSize)
 {
   SMBContext* ctx = (SMBContext*)context;
-  if (!ctx || !ctx->pFileHandle|| !ctx->pSmbContext)
+  if (!ctx || !ctx->pFileHandle)
     return -1;
 
+  smb2_context *pSmbContext = CSMBConnection::Get().GetSmbContext();
+
   P8PLATFORM::CLockObject lock(CSMBConnection::Get());
-  ssize_t numberOfBytesRead = smb2_read(ctx->pSmbContext, ctx->pFileHandle, (uint8_t *)lpBuf, uiBufSize);
+  ssize_t numberOfBytesRead = smb2_read(pSmbContext, ctx->pFileHandle, (uint8_t *)lpBuf, uiBufSize);
 
   CSMBConnection::Get().resetKeepAlive(ctx->sharename, ctx->pFileHandle);
 
   //something went wrong ...
   if (numberOfBytesRead < 0)
-    kodi::Log(ADDON_LOG_ERROR, "%s - Error( %" PRId64", %s )", __FUNCTION__, (int64_t)numberOfBytesRead, smb2_get_error(ctx->pSmbContext));
+    kodi::Log(ADDON_LOG_ERROR, "%s - Error( %" PRId64", %s )", __FUNCTION__, (int64_t)numberOfBytesRead, smb2_get_error(pSmbContext));
+
+  delete pSmbContext
 
   return numberOfBytesRead;
 }
@@ -104,21 +105,24 @@ ssize_t CSMBFile::Read(void* context, void* lpBuf, size_t uiBufSize)
 int64_t CSMBFile::Seek(void* context, int64_t iFilePosition, int iWhence)
 {
   SMBContext* ctx = (SMBContext*)context;
-  if (!ctx || !ctx->pFileHandle|| !ctx->pSmbContext)
+  if (!ctx || !ctx->pFileHandle)
     return 0;
 
   int ret = 0;
   uint64_t offset = 0;
+  smb2_context *pSmbContext = CSMBConnection::Get().GetSmbContext();
 
   P8PLATFORM::CLockObject lock(CSMBConnection::Get());
 
-  ret = (int)smb2_lseek(ctx->pSmbContext, ctx->pFileHandle, iFilePosition, iWhence, &offset);
+  ret = (int)smb2_lseek(pSmbContext, ctx->pFileHandle, iFilePosition, iWhence, &offset);
   if (ret < 0)
   {
     kodi::Log(ADDON_LOG_ERROR, "%s - Error( seekpos: %" PRId64 ", whence: %i, fsize: %" PRId64 ", %s)",
-              __FUNCTION__, iFilePosition, iWhence, ctx->size, smb2_get_error(ctx->pSmbContext));
+              __FUNCTION__, iFilePosition, iWhence, ctx->size, smb2_get_error(pSmbContext));
     return -1;
   }
+
+  delete pSmbContext
 
   return (int64_t)offset;
 }
@@ -169,7 +173,6 @@ int CSMBFile::Stat(const VFSURL& url, struct __stat64* buffer)
   smb2_url *smburl = nullptr;
   int ret = 0;
   P8PLATFORM::CLockObject lock(CSMBConnection::Get());
-  std::string filename;
 
   if(!CSMBConnection::Get().Connect(url))
   {
@@ -216,24 +219,27 @@ bool CSMBFile::Close(void* context)
   if (!ctx)
     return false;
 
+  smb2_context *pSmbContext = CSMBConnection::Get().GetSmbContext();
+
   P8PLATFORM::CLockObject lock(CSMBConnection::Get());
   CSMBConnection::Get().AddIdleConnection();
 
-  if (ctx->pFileHandle != nullptr && ctx->pSmbContext != nullptr)
+  if (ctx->pFileHandle != nullptr && pSmbContext != nullptr)
   {
     int ret = 0;
     kodi::Log(ADDON_LOG_DEBUG,"CSMBFile::Close closing file %s", ctx->filename.c_str());
 
     CSMBConnection::Get().removeFromKeepAliveList(ctx->pFileHandle);
-    ret = smb2_close(ctx->pSmbContext, ctx->pFileHandle);
+    ret = smb2_close(pSmbContext, ctx->pFileHandle);
 
     if (ret < 0)
     {
-      kodi::Log(ADDON_LOG_ERROR, "Failed to close(%s) - %s", ctx->filename.c_str(), smb2_get_error(ctx->pSmbContext));
+      kodi::Log(ADDON_LOG_ERROR, "Failed to close(%s) - %s", ctx->filename.c_str(), smb2_get_error(pSmbContext));
     }
   }
 
   delete ctx;
+  delete pSmbContext
 
   return true;
 }

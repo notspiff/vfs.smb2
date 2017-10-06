@@ -68,10 +68,6 @@ public:
   //removes file handle from keep alive list
   void removeFromKeepAliveList(struct smb2fh  *_pFileHandle);
 
-  const std::string& GetConnectedIp() const {return m_resolvedHostName;}
-  const std::string& GetConnectedExport() const {return m_shareName;}
-  const std::string  GetContextMapId() const {return m_shareName;}
-
 private:
   CSMBConnection();
   struct smb2_context *m_pSmbContext;

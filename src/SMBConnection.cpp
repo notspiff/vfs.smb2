@@ -183,7 +183,7 @@ bool CSMBConnection::Connect(const VFSURL& url)
 {
   P8PLATFORM::CLockObject lock(*this);
   smb2_url *smburl = nullptr;
-  std::string sharename = url.sharename;
+  std::string sharename = url.hostname + "/" + url.sharename;
 
   resolveHost(url.hostname);
 

@@ -28,8 +28,6 @@ struct SMBContext
 {
   struct smb2fh* pFileHandle;
   int64_t size;
-  struct smb2_context* pSmbContext;
-  std::string sharename;
   std::string filename;
 };
 
