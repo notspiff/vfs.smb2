@@ -55,11 +55,11 @@ void* CSMBFile::Open(const VFSURL& url)
 
   SMBContext* result = new SMBContext;
 
-  result->pFileHandle = smb2_open(result->pSmbContext, smburl->path, O_RDONLY);
+  result->pFileHandle = smb2_open(CSMBConnection::Get().GetSmbContext(), smburl->path, O_RDONLY);
 
   if (!result->pFileHandle)
   {
-    kodi::Log(ADDON_LOG_INFO, "CSMBFile::Open: Unable to open file : '%s'  error : '%s'", smburl->path, smb2_get_error(result->pSmbContext));
+    kodi::Log(ADDON_LOG_INFO, "CSMBFile::Open: Unable to open file : '%s'  error : '%s'", smburl->path, smb2_get_error(CSMBConnection::Get().GetSmbContext()));
     delete result;
     return nullptr;
   }
@@ -86,18 +86,14 @@ ssize_t CSMBFile::Read(void* context, void* lpBuf, size_t uiBufSize)
   if (!ctx || !ctx->pFileHandle)
     return -1;
 
-  smb2_context *pSmbContext = CSMBConnection::Get().GetSmbContext();
-
   P8PLATFORM::CLockObject lock(CSMBConnection::Get());
-  ssize_t numberOfBytesRead = smb2_read(pSmbContext, ctx->pFileHandle, (uint8_t *)lpBuf, uiBufSize);
+  ssize_t numberOfBytesRead = smb2_read(CSMBConnection::Get().GetSmbContext(), ctx->pFileHandle, (uint8_t *)lpBuf, uiBufSize);
 
   CSMBConnection::Get().resetKeepAlive(ctx->sharename, ctx->pFileHandle);
 
   //something went wrong ...
   if (numberOfBytesRead < 0)
-    kodi::Log(ADDON_LOG_ERROR, "%s - Error( %" PRId64", %s )", __FUNCTION__, (int64_t)numberOfBytesRead, smb2_get_error(pSmbContext));
-
-  delete pSmbContext
+    kodi::Log(ADDON_LOG_ERROR, "%s - Error( %" PRId64", %s )", __FUNCTION__, (int64_t)numberOfBytesRead, smb2_get_error(CSMBConnection::Get().GetSmbContext()));
 
   return numberOfBytesRead;
 }
@@ -110,21 +106,37 @@ int64_t CSMBFile::Seek(void* context, int64_t iFilePosition, int iWhence)
 
   int ret = 0;
   uint64_t offset = 0;
-  smb2_context *pSmbContext = CSMBConnection::Get().GetSmbContext();
 
   P8PLATFORM::CLockObject lock(CSMBConnection::Get());
 
-  ret = (int)smb2_lseek(pSmbContext, ctx->pFileHandle, iFilePosition, iWhence, &offset);
+  ret = (int)smb2_lseek(CSMBConnection::Get().GetSmbContext(), ctx->pFileHandle, iFilePosition, iWhence, &offset);
   if (ret < 0)
   {
     kodi::Log(ADDON_LOG_ERROR, "%s - Error( seekpos: %" PRId64 ", whence: %i, fsize: %" PRId64 ", %s)",
-              __FUNCTION__, iFilePosition, iWhence, ctx->size, smb2_get_error(pSmbContext));
+              __FUNCTION__, iFilePosition, iWhence, ctx->size, smb2_get_error(CSMBConnection::Get().GetSmbContext()));
     return -1;
   }
 
-  delete pSmbContext
-
   return (int64_t)offset;
+}
+
+int CSMBFile::Truncate(void* context, int64_t size)
+{
+  SMBContext* ctx = (SMBContext*)context;
+  if (!ctx || !ctx->pFileHandle)
+    return -1;
+
+  int ret = 0;
+  P8PLATFORM::CLockObject lock(CSMBConnection::Get());
+  ret = (int)smb2_truncate(CSMBConnection::Get().GetSmbContext(), ctx->pFileHandle, size);
+  if (ret < 0)
+  {
+    kodi::Log(ADDON_LOG_ERROR, "%s - Error( ftruncate: %" PRId64 ", fsize: %" PRId64 ", %s)",
+              __FUNCTION__, size, ctx->size, smb2_get_error(CSMBConnection::Get().GetSmbContext()));
+    return -1;
+  }
+
+  return ret;
 }
 
 int64_t CSMBFile::GetLength(void* context)
@@ -219,27 +231,24 @@ bool CSMBFile::Close(void* context)
   if (!ctx)
     return false;
 
-  smb2_context *pSmbContext = CSMBConnection::Get().GetSmbContext();
-
   P8PLATFORM::CLockObject lock(CSMBConnection::Get());
   CSMBConnection::Get().AddIdleConnection();
 
-  if (ctx->pFileHandle != nullptr && pSmbContext != nullptr)
+  if (ctx->pFileHandle != nullptr && CSMBConnection::Get().GetSmbContext() != nullptr)
   {
     int ret = 0;
     kodi::Log(ADDON_LOG_DEBUG,"CSMBFile::Close closing file %s", ctx->filename.c_str());
 
     CSMBConnection::Get().removeFromKeepAliveList(ctx->pFileHandle);
-    ret = smb2_close(pSmbContext, ctx->pFileHandle);
+    ret = smb2_close(CSMBConnection::Get().GetSmbContext(), ctx->pFileHandle);
 
     if (ret < 0)
     {
-      kodi::Log(ADDON_LOG_ERROR, "Failed to close(%s) - %s", ctx->filename.c_str(), smb2_get_error(pSmbContext));
+      kodi::Log(ADDON_LOG_ERROR, "Failed to close(%s) - %s", ctx->filename.c_str(), smb2_get_error(CSMBConnection::Get().GetSmbContext()));
     }
   }
 
   delete ctx;
-  delete pSmbContext
 
   return true;
 }

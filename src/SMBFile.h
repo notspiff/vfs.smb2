@@ -38,6 +38,7 @@ public:
   virtual void* Open(const VFSURL& url) override;
   virtual ssize_t Read(void* context, void* lpBuf, size_t uiBufSize) override;
   virtual int64_t Seek(void* context, int64_t iFilePosition, int iWhence) override;
+  virtual int Truncate(void* context, int64_t size) override;
   virtual int64_t GetLength(void* context) override;
   virtual int64_t GetPosition(void* context) override;
   virtual int GetChunkSize(void* context) override {return CSMBConnection::Get().GetMaxReadChunkSize();}
