@@ -64,7 +64,7 @@ bool CSMBConnection::Connect(const VFSURL& url)
 
   resolveHost(url.hostname);
 
-  if(m_hostName != url.hostname)
+  if(m_hostName != url.hostname || !m_pSmbContext)
   {
     m_pSmbContext = smb2_init_context();
     if(!m_pSmbContext)

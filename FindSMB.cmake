@@ -14,8 +14,9 @@ if(PKG_CONFIG_FOUND)
   pkg_check_modules(PC_SMB libsmb2 QUIET)
 endif()
 
-find_path(SMB_INCLUDE_DIR smb2/libsmb2.h
-                          PATHS ${PC_SMB_INCLUDEDIR})
+find_path(SMB_INCLUDE_DIR libsmb2.h
+                          PATHS ${PC_SMB_INCLUDEDIR}
+                          PATH_SUFFIXES smb2)
 
 set(SMB_VERSION ${PC_SMB_VERSION})
 

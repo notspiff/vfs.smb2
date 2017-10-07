@@ -87,6 +87,9 @@ ssize_t CSMBFile::Read(void* context, void* lpBuf, size_t uiBufSize)
   if (!ctx || !ctx->pFileHandle|| !ctx->pSmbContext)
     return -1;
 
+  if (uiBufSize > 4096)
+    uiBufSize = 4096;
+
   P8PLATFORM::CLockObject lock(CSMBConnection::Get());
   ssize_t numberOfBytesRead = smb2_read(ctx->pSmbContext, ctx->pFileHandle, (uint8_t *)lpBuf, uiBufSize);
 

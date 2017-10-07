@@ -21,6 +21,7 @@ set(SMB_HEADERS src/SMBConnection.h
 
 set(SMB_SOURCES src/SMBConnection.cpp
                 src/SMBFile.cpp)
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fpermissive")
 
 set(DEPLIBS ${SMB_LIBRARIES} ${p8-platform_LIBRARIES} ${kodiplatform_LIBRARIES})
 
